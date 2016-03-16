@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-#use strict;
+use strict;
 use warnings;
 use 5.20.00;
 use feature 'signatures'; no warnings qw(experimental::signatures);
