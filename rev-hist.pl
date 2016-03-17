@@ -87,7 +87,7 @@ sub get_file_list() {
 	foreach my $file ( @{ $response->{files} } ) { 
 		# focus($file) -> over( 1, ['createdTime', 'modifiedTime'], sub{ time2ut($_[0]) } );
 		my @fkeys = qw/id kind name trashed mimeType owners size 
-					   md5Checksum createdTime modifiedTime headRevisionId/;
+				md5Checksum createdTime modifiedTime headRevisionId/;
 		my %fhash = %{ shave($file, @fkeys) };
 		update_fields(\%fhash, \&time2ut, qw/createdTime modifiedTime/);
 
@@ -98,14 +98,14 @@ sub get_file_list() {
 sub file_get_properties( $file_id ) {
 	die "No fileId given!" unless $file_id;
 	my $response = call_api("files/$file_id",
-							 "fields=createdTime,description,fileExtension,".
-							 "headRevisionId,id,kind,lastModifyingUser,".
-							 "md5Checksum,mimeType,modifiedTime,name,".
-							 "originalFilename,owners,parents,permissions,".
-							 "properties,shared,sharingUser,size,trashed,".
-							 "version,webContentLink");
+						 "fields=createdTime,description,fileExtension,".
+						 "headRevisionId,id,kind,lastModifyingUser,".
+						 "md5Checksum,mimeType,modifiedTime,name,".
+						 "originalFilename,owners,parents,permissions,".
+						 "properties,shared,sharingUser,size,trashed,".
+						 "version,webContentLink");
 	update_fields(\%response, \&time2ut, qw/createdTime modifiedTime/)
-
+	# unshaved
 }
 
 
@@ -152,8 +152,9 @@ sub file_revisions_get( $file_id )  {
 	foreach my $revision ( @{ $response->{revisions} } ) {
 		$revision = shave($revision, qw/id kind lastModifyingUser mimeType modifiedTime/);
 		update_fields(\%$revision, \&time2ut, qw/modifiedTime/);
-		$revision->{lastModifyingUser} = shave( $revision->{lastModifyingUser}, 
-							qw/displayName kind/);
+		$revision->{lastModifyingUser} = 
+			shave( $revision->{lastModifyingUser}, 
+					qw/displayName kind/);
 	}
 	
 }
@@ -171,9 +172,8 @@ sub file_revisions_get( $file_id )  {
 sub file_revision_get( $file_id, $revision_id ) {
 	die "No fileId or revisionId given" unless $file_id && $revision_id;
 	my $response = call_api("files/$file_id/revisions/$revision_id", 
-							"fields=id,kind,lastModifyingUser,md5Checksum,size,".
-							"modifiedTime,originalFilename,published,mimeType");
-	print Dumper $response;
+				"fields=id,kind,lastModifyingUser,md5Checksum,size,".
+				"modifiedTime,originalFilename,published,mimeType");
 }
 
 # Implement collector of LMUT's (possibly, w/ originated-from-UID)
