@@ -29,7 +29,7 @@ sub shave($hash, @fkeys) { # nice filter-lens-transform
 	my %shaved; # Data::Focus?
 	@fkeys = grep { exists $hash->{$_} } @fkeys; # filter matching keys
 	@shaved{@fkeys} = @$hash{@fkeys}; # map matches
-	return %shaved; # cast hash-ref
+	return \%shaved; # cast hash-ref
 }
 
 sub update_fields($hash, $fun, @fields) {
@@ -87,7 +87,7 @@ sub get_file_list() {
 		# focus($file) -> over( 1, ['createdTime', 'modifiedTime'], sub{ time2ut($_[0]) } );
 		my @fkeys = qw/id kind name trashed mimeType owners size 
 					   md5Checksum createdTime modifiedTime headRevisionId/;
-		my %fhash = shave($file, @fkeys);
+		my %fhash = %{ shave($file, @fkeys) };
 		update_fields(\%fhash, \&time2ut, qw/createdTime modifiedTime/);
 
 	}
@@ -128,6 +128,20 @@ sub collect_issuers {
 ## https://developers.google.com/drive/v3/reference/revisions#methods
 ## GET https://www.googleapis.com/drive/v3/files/ fileid /revisions?key={API_KEY}
 ### { "kind": "drive#revision", "id": revId, "modifiedTime": RFC 3339 date-time } 
+sub file_revisions_get( $file_id )  {
+	die "No fileId given!" unless $file_id;
+	my $response = call_api("files/$file_id/revisions", 
+				"fields=kind,revisions");
+	foreach my $revision ( @{ $response->{revisions} } ) {
+		$revision = shave($revision, qw/id kind lastModifyingUser mimeType modifiedTime/);
+		update_fields(\%$revision, \&time2ut, qw/modifiedTime/);
+		$revision->{lastModifyingUser} = shave( $revision->{lastModifyingUser}, 
+							qw/displayName kind/);
+	}
+	
+}
+
+
 
 # harm into each revision & collect LMUT's (possibly, w/ originated-from-UID)
 ## https://developers.google.com/drive/v3/reference/revisions/get
