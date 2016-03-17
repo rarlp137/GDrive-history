@@ -64,6 +64,7 @@ my $tok_res = $ua->post($token_request_url
 my $json = $tok_res->json;
 my $auth_key = $json->{token_type} . ' ' . $json->{access_token};
 
+# API caller proto
 sub call_api($api, @flags) { 
 # What API are we using?
 	my $url = 'https://www.googleapis.com/drive/v3/'. $api;
@@ -76,7 +77,7 @@ sub call_api($api, @flags) {
 	return $call_res->json;
 };
 
-#Fetch list of available files with id's to play w/
+# Fetch list of available files with id's to play w/ proto
 sub get_file_list() {
 #L<https://developers.google.com/drive/v3/reference/files/list>
 #Resp: "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
@@ -92,6 +93,22 @@ sub get_file_list() {
 
 	}
 }
+
+# Fetch file properties proto
+sub file_get_properties( $file_id ) {
+	die "No fileId given!" unless $file_id;
+	my $response = call_api("files/$file_id",
+							 "fields=createdTime,description,fileExtension,".
+							 "headRevisionId,id,kind,lastModifyingUser,".
+							 "md5Checksum,mimeType,modifiedTime,name,".
+							 "originalFilename,owners,parents,permissions,".
+							 "properties,shared,sharingUser,size,trashed,".
+							 "version,webContentLink");
+	update_fields(\%response, \&time2ut, qw/createdTime modifiedTime/)
+
+}
+
+
 
 sub filter_files() {
 	# 2 implement
@@ -124,7 +141,7 @@ sub collect_issuers {
 
 # export to watch-list / local csv w/ id and title ## handmade shit _@iffun
 
-# for each file in list get list of revisions, get start-date & last-mod-date
+# for each file in list get list of revisions, get start-date & last-mod-date proto
 ## https://developers.google.com/drive/v3/reference/revisions#methods
 ## GET https://www.googleapis.com/drive/v3/files/ fileid /revisions?key={API_KEY}
 ### { "kind": "drive#revision", "id": revId, "modifiedTime": RFC 3339 date-time } 
@@ -143,7 +160,7 @@ sub file_revisions_get( $file_id )  {
 
 
 
-# harm into each revision & collect LMUT's (possibly, w/ originated-from-UID)
+# harm into each revision proto
 ## https://developers.google.com/drive/v3/reference/revisions/get
 ## https://developers.google.com/apis-explorer/#p/drive/v3/drive.revisions.get
 ## GET https://www.googleapis.com/drive/v3/files/ _fileId_ /revisions/ _revId_ ?
@@ -151,8 +168,15 @@ sub file_revisions_get( $file_id )  {
 ##	published,publishedOutsideDomain,size& key={API_KEY} 
 ### { "kind": "drive#revision", "id": revId ,
 ###	"lastModifyingUser": { "kind": "drive#user", "displayName": userName}}
+sub file_revision_get( $file_id, $revision_id ) {
+	die "No fileId or revisionId given" unless $file_id && $revision_id;
+	my $response = call_api("files/$file_id/revisions/$revision_id", 
+							"fields=id,kind,lastModifyingUser,md5Checksum,size,".
+							"modifiedTime,originalFilename,published,mimeType");
+	print Dumper $response;
+}
 
-
+# Implement collector of LMUT's (possibly, w/ originated-from-UID)
 
 
 
