@@ -25,7 +25,7 @@ use Mojo::UserAgent;
 binmode STDOUT, ":utf8";
 
 
-sub shave($hash, @fkeys) { # awesome filter-lens-transform
+sub shave($hash, @fkeys) { # nice filter-lens-transform
 	my %shaved; # Data::Focus?
 	@fkeys = grep { exists $hash->{$_} } @fkeys; # filter matching keys
 	@shaved{@fkeys} = @$hash{@fkeys}; # map matches
@@ -33,8 +33,8 @@ sub shave($hash, @fkeys) { # awesome filter-lens-transform
 }
 
 sub update_fields($hash, $fun, @fields) {
-	foreach my $field (@fields) {
-		$hash->{$field} = &$fun($hash->{$field}); # apply directly
+	foreach my $field (@fields) { # apply directly
+		$hash->{$field} = &$fun($hash->{$field});
 	}
 }
 
@@ -78,12 +78,10 @@ sub call_api($api, @flags) {
 
 #Fetch list of available files with id's to play w/
 sub get_file_list() {
-=pod 
-L<https://developers.google.com/drive/v3/reference/files/list>
-Ref: "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
+#L<https://developers.google.com/drive/v3/reference/files/list>
+#Resp: "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
 # GET https://www.googleapis.com/drive/v3/files?corpus=domain&orderBy=folder&fields=files%2Ckind&key={API_KEY}
-Resp: { "kind": "drive#fileList", "files": [  {  id  } , ... ]
-=cut
+#Resp: { "kind": "drive#fileList", "files": [  {  id  } , ... ]
 	my $response = call_api('files', qw/corpus=domain orderBy=folder fields=files/);
 	foreach my $file ( @{ $response->{files} } ) { 
 		# focus($file) -> over( 1, ['createdTime', 'modifiedTime'], sub{ time2ut($_[0]) } );
@@ -134,8 +132,11 @@ sub collect_issuers {
 # harm into each revision & collect LMUT's (possibly, w/ originated-from-UID)
 ## https://developers.google.com/drive/v3/reference/revisions/get
 ## https://developers.google.com/apis-explorer/#p/drive/v3/drive.revisions.get
-## GET https://www.googleapis.com/drive/v3/files/ _fileId_ /revisions/ _revId_ ?fields=id%2CkeepForever%2Ckind%2ClastModifyingUser%2Cmd5Checksum%2CmimeType%2CmodifiedTime%2CoriginalFilename%2CpublishAuto%2Cpublished%2CpublishedOutsideDomain%2Csize& key={API_KEY} 
-### { "kind": "drive#revision", "id": revId , "lastModifyingUser": { "kind": "drive#user", "displayName": userName}}
+## GET https://www.googleapis.com/drive/v3/files/ _fileId_ /revisions/ _revId_ ?
+##	fields=id,keepForever,kind,lastModifyingUser,md5Checksum,mimeType,modifiedTime,originalFilename,publishAuto,
+##	published,publishedOutsideDomain,size& key={API_KEY} 
+### { "kind": "drive#revision", "id": revId ,
+###	"lastModifyingUser": { "kind": "drive#user", "displayName": userName}}
 
 
 
@@ -151,7 +152,8 @@ sub collect_issuers {
 
 
 # fetch comments & replies, collect them in 2-by-2 hash (fileId, authorId ; time , content->lenght)
-## GET https://www.googleapis.com/drive/v3/files/ fileId /comments?includeDeleted=true&pageSize=100& fields=comments%2Ckind%2CnextPageToken& key={YOUR_API_KEY}
+## GET https://www.googleapis.com/drive/v3/files/ fileId /comments?
+##	includeDeleted=true&pageSize=100& fields=comments,kind,nextPageToken& key={YOUR_API_KEY}
 ### { "kind": "drive#commentList", "comments": [ 
 #	  { "kind": "drive#comment", commentId, times, author, "replies": [ 
 #			{"kind": "drive#reply" is_derived_from: "drive#comment" } ]
