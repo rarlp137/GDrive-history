@@ -1,15 +1,18 @@
 #! /usr/bin/env perl
-use strict;
+#use strict;
 use warnings;
 use 5.20.00;
 use feature 'signatures'; no warnings qw(experimental::signatures);
+use Getopt::Long;
+#use Config::JSON;
 use Data::Dumper; # Perl core module
-
+#use Data::Dump qw(dump); # $ cpanm Data::Dump
 #use Data::DPath 'dpath';
 #use Data::Focus qw(focus);
 #use Benchmark;
 #use Hash::Transform;
 #use Smart::Comments;
+#use Params::Validate qw(:all);
 
 use DateTime;
 use DateTime::Format::RFC3339;
@@ -29,6 +32,13 @@ sub shave($hash, @fkeys) { # awesome filter-lens-transform
 	return %shaved; # cast hash-ref
 }
 
+sub update_fields($hash, $fun, @fields) {
+	foreach my $field (@fields) {
+		$hash->{$field} = &$fun($hash->{$field}); # apply directly
+	}
+}
+
+# stitch the RFC-3339 date-time to unix time
 sub time2ut($) {
 	my $f = DateTime::Format::RFC3339->new();
 	my $dt = $f->parse_datetime(shift);
@@ -66,14 +76,13 @@ sub call_api($api, @flags) {
 	return $call_res->json;
 };
 
-
-sub get_file_list() {#Fetch list of available files with id's to play w/
+#Fetch list of available files with id's to play w/
+sub get_file_list() {
 =pod 
 L<https://developers.google.com/drive/v3/reference/files/list>
-# "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
+Ref: "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
 # GET https://www.googleapis.com/drive/v3/files?corpus=domain&orderBy=folder&fields=files%2Ckind&key={API_KEY}
-### { "kind": "drive#fileList", "files": [  {  id  } , ... ]
-
+Resp: { "kind": "drive#fileList", "files": [  {  id  } , ... ]
 =cut
 	my $response = call_api('files', qw/corpus=domain orderBy=folder fields=files/);
 	foreach my $file ( @{ $response->{files} } ) { 
@@ -81,19 +90,35 @@ L<https://developers.google.com/drive/v3/reference/files/list>
 		my @fkeys = qw/id kind name trashed mimeType owners size 
 					   md5Checksum createdTime modifiedTime headRevisionId/;
 		my %fhash = shave($file, @fkeys);
+		update_fields(\%fhash, \&time2ut, qw/createdTime modifiedTime/);
 
-#		$fhash{createdTime} = time2ut($fhash{createdTime});
-#		my %rules = (	createdTime => 'createdTime',
-#						modifiedTime=> sub { print($_) },
-#					);
-#		my $transform = Hash::Transform->new(%rules);
-#		%fhash = $transform->apply(%fhash);							
 	}
 }
 
-# stitch each of the RFC-3339 date-time to unix time, strip & set appropriate timezone for each userId
+sub filter_files() {
+	# 2 implement
+	...
+}
 
-# filter variety graphs for kinds
+sub file_list_load() {
+	# 2 implement
+	...
+}
+
+sub file_list_store() {
+	# 2 implement
+	...
+}
+
+# collect users, owners, modifiers
+sub collect_issuers {
+	# 2 implement
+	...
+}
+
+
+
+# filter variety graphs for kinds, (strip & set appropriate timezone for each userId)?
 
 
 # filter through the exc/inc-lusion list (personal files of mine); instead, one might grep through the sources
