@@ -1,6 +1,7 @@
 #! /usr/bin/env perl
 #use strict;
 use warnings;
+use diagnostics;
 use 5.20.00;
 use feature 'signatures'; no warnings qw(experimental::signatures);
 use Getopt::Long;
@@ -9,10 +10,10 @@ use Data::Dumper; # Perl core module
 #use Data::Dump qw(dump); # $ cpanm Data::Dump
 #use Data::DPath 'dpath';
 #use Data::Focus qw(focus);
-#use Benchmark;
+use Time::HiRes qw(time);
 #use Hash::Transform;
 #use Smart::Comments;
-#use Params::Validate qw(:all);
+use Params::Validate qw(:all);
 
 use DateTime;
 use DateTime::Format::RFC3339;
@@ -21,7 +22,7 @@ use Mojo::JWT::Google;
 ## Crypt::OpenSSL::RSA # isok w/o, not necessary
 use Mojo::Collection 'c';
 use Mojo::UserAgent;
-
+use utf8;
 binmode STDOUT, ":utf8";
 
 
@@ -65,17 +66,56 @@ my $json = $tok_res->json;
 my $auth_key = $json->{token_type} . ' ' . $json->{access_token};
 
 # API caller proto
-sub call_api($api, @flags) { 
-# What API are we using?
-	my $url = 'https://www.googleapis.com/drive/v3/'. $api;
-	my $flags = (scalar @flags > 0)?( '?' . join('&', @flags) ):'';
-	$url .=$flags;
-	my $call_header =  {'Authorization' => $auth_key};
-	my $call_res = $ua->get( $url  => $call_header)->res 
-		or die "Can't call $api with $flags!\n";
-
+sub call_api { # What API are we using?
+	my %arg = validate( @_, { # Validate arguments
+		site 	=> { default => 'https://www.googleapis.com/drive/v3/' },
+		api		=> {type => SCALAR},
+		debug	=> {type => SCALAR, optional => 1, default => 0},
+		flags	=> {type => ARRAYREF},
+		fields	=> {type => ARRAYREF, optional => 1},
+		auth_key=> {type => SCALAR, optional => 
+						sub { return defined $auth_key },
+	});
+	print "\tRequest arguments: ", Dumper {%arg} if 
+		($arg{debug} eq 'request');
+	my @flags = @{ $arg{flags}  };
+	my @fields= @{ $arg{fields} };
+	my $url = $arg{site} . $arg{api} ;
+	
+	my $flags = ( scalar @flags  > 0 ) ?
+				('?' . join('&', @flags ) ) 
+				: '';
+	my $fields= ( scalar @fields > 0 ) ?
+				(($flags?'&':'?') . 
+				'fields='.join(',', @fields ) ) 
+				: '';
+	$url .= $flags . $fields;
+	print "GET request : $url\n" 
+		if ($arg{debug} eq 'request'||'response'||'time');
+	if (defined $arg{auth_key}) { 
+		$auth_key = $arg{auth_key}; 
+		print "Using locally-proposed auth_key: $auth_key\n" if 
+			($arg{debug} eq 'response');
+	};
+	my $call_res;
+	if (defined $auth_key) {
+		my $time0 = time;
+		my $call_header =  {'Authorization' => $auth_key};
+		$call_res = $ua->get( $url  => $call_header)->res 
+			or die "Can't call $arg{api}-api with $flags!\n";
+		if ($call_res->{error}) {
+			
+			# implement some error handling here
+			
+		}
+		print "Response: ", Dumper $call_res->json if 
+			($arg{debug} eq 'response');
+		print "Response took: ". (time-$time0). " s\n" if 
+			($arg{debug} eq 'time');
+	} else {die "No authentification \n"}
 	return $call_res->json;
 };
+
 
 # Fetch list of available files with id's to play w/ proto
 sub get_file_list() {
@@ -98,12 +138,12 @@ sub get_file_list() {
 sub file_get_properties( $file_id ) {
 	die "No fileId given!" unless $file_id;
 	my $response = call_api("files/$file_id",
-						 "fields=createdTime,description,fileExtension,".
-						 "headRevisionId,id,kind,lastModifyingUser,".
-						 "md5Checksum,mimeType,modifiedTime,name,".
-						 "originalFilename,owners,parents,permissions,".
-						 "properties,shared,sharingUser,size,trashed,".
-						 "version,webContentLink");
+				 "fields=createdTime,description,fileExtension,".
+				 "headRevisionId,id,kind,lastModifyingUser,".
+				 "md5Checksum,mimeType,modifiedTime,name,".
+				 "originalFilename,owners,parents,permissions,".
+				 "properties,shared,sharingUser,size,trashed,".
+				 "version,webContentLink");
 	update_fields(\%response, \&time2ut, qw/createdTime modifiedTime/)
 	# unshaved
 }
