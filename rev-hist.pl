@@ -131,13 +131,13 @@ sub file_list_get {#Fetch list of available files with id's to play w/
 	my @flags = qw/corpus=domain orderBy=folder/;
 	my %arg = validate( @_, {
 		target	=> {type => HASHREF, optional => 1},
-		#flags	=> {type => ARRAYREF, optional => 1},
 		#fields	=> {type => ARRAYREF, optional => 1},
 		fkeys	=> {type => ARRAYREF, optional => 1, default =>\@fkeys},
 		flags	=> {type => ARRAYREF, optional => 1, default =>\@flags}, 
 		shave	=> {type => SCALAR, optional => 1},
-		debug => {type => SCALAR, optional => 1, default => undef},
+		debug 	=> {type => SCALAR, optional => 1, default => undef},
 		});
+	
 	my @fields =qw/files/;
 	my $response = call_api(
 		api => 'files', 
@@ -153,6 +153,7 @@ sub file_list_get {#Fetch list of available files with id's to play w/
 	
 	
 }
+
 
 # Fetch file properties proto
 sub file_get {
@@ -225,18 +226,29 @@ sub collect_issuers {
 ## https://developers.google.com/drive/v3/reference/revisions#methods
 ## GET https://www.googleapis.com/drive/v3/files/ fileid /revisions?key={API_KEY}
 ### { "kind": "drive#revision", "id": revId, "modifiedTime": RFC 3339 date-time } 
-sub file_revisions_get( $file_id )  {
-	die "No fileId given!" unless $file_id;
-	my $response = call_api("files/$file_id/revisions", 
-				"fields=kind,revisions");
+sub file_revisions_get  {
+	my %arg = validate( @_, {
+		target	=> {type => HASHREF, optional => 1},
+		file_id	=> {type => SCALAR},
+		fields	=> {type => ARRAYREF, optional => 1},
+		flags	=> {type => ARRAYREF, optional => 1}, 
+		shave	=> {type => SCALAR, optional => 1},
+		debug 	=> {type => SCALAR, optional => 1, default => undef},
+		});
+	my @fields = qw/kind revisions/;
+	my $response = call_api(
+			api => 'files/'.$arg{file_id}.'/revisions/', 
+			flags	=> undef,
+			fields	=> \@fields,
+			);
 	foreach my $revision ( @{ $response->{revisions} } ) {
-		$revision = shave($revision, qw/id kind lastModifyingUser mimeType modifiedTime/);
-		update_fields(\%$revision, \&time2ut, qw/modifiedTime/);
-		$revision->{lastModifyingUser} = 
-			shave( $revision->{lastModifyingUser}, 
-					qw/displayName kind/);
+		$revision = shave($revision, qw/id kind lastModifyingUser 
+									 mimeType modifiedTime/);
+		update_fields(\%$revision, \&time2ut, \@{qw/modifiedTime/});
+		#$revision->{lastModifyingUser} = shave( $revision->{lastModifyingUser}, 
+		#										qw/displayName kind/);
 	}
-	
+	print Dumper $response;
 }
 
 
@@ -249,11 +261,26 @@ sub file_revisions_get( $file_id )  {
 ##	published,publishedOutsideDomain,size& key={API_KEY} 
 ### { "kind": "drive#revision", "id": revId ,
 ###	"lastModifyingUser": { "kind": "drive#user", "displayName": userName}}
-sub file_revision_get( $file_id, $revision_id ) {
-	die "No fileId or revisionId given" unless $file_id && $revision_id;
-	my $response = call_api("files/$file_id/revisions/$revision_id", 
-				"fields=id,kind,lastModifyingUser,md5Checksum,size,".
-				"modifiedTime,originalFilename,published,mimeType");
+sub file_revision_get {
+	my @dfields = qw/id kind mimeType md5Checksum size modifiedTime
+					  lastModifyingUser originalFilename published/;
+	my %arg = validate( @_, {
+		target	=> {type => HASHREF, optional => 1},
+		file_id	=> {type => SCALAR},
+		revision_id => {type => SCALAR},
+		fields	=> {type => ARRAYREF, optional => 1},
+		fkeys	=> {type => ARRAYREF, optional => 1},
+		flags	=> {type => ARRAYREF, optional => 1}, 
+		shave	=> {type => SCALAR, optional => 1},
+		debug 	=> {type => SCALAR, optional => 1, default => undef},
+		});
+	my $response = call_api(
+		api 	=> 'files/'.$arg{file_id}.'/revisions/'.$arg{revision_id}, 
+		flags	=> undef,
+		fields	=> \@dfields,
+		);
+	
+	print Dumper $response if defined $arg{debug};
 }
 
 # Implement collector of LMUT's (possibly, w/ originated-from-UID)
