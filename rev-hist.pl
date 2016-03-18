@@ -33,19 +33,26 @@ sub shave($hash, @fkeys) { # nice filter-lens-transform
 	return \%shaved; # cast hash-ref
 }
 
-sub update_fields($hash, $fun, @fields) {
-	foreach my $field (@fields) { # apply directly
-		$hash->{$field} = &$fun($hash->{$field});
+sub update_fields {
+	my %arg = validate( @_, { # Validate arguments
+		hash 	=> {type => HASHREF},
+		funct	=> {type => CODEREF},
+		fields	=> {type => ARRAYREF},
+		debug	=> {type => SCALAR, optional => 1},});
+	print Dumper {%arg} if $arg{debug};
+	foreach my $field (@{$arg{fields}}) {
+		${$arg{hash}}{$field} = 
+			$arg{funct}->( str => ${$arg{hash}}{$field}); # apply directly
 	}
 }
 
 # stitch the RFC-3339 date-time to unix time
-sub time2ut($) {
+sub time2ut { 
+	my %arg = validate( @_, { str => {type => SCALAR},});
 	my $f = DateTime::Format::RFC3339->new();
-	my $dt = $f->parse_datetime(shift);
+	my $dt = $f->parse_datetime($arg{str});
 	return $dt->epoch;
 }
-
 
 # initiate OAuth2.0 session
 my $jwt = Mojo::JWT::Google->new( 
@@ -70,28 +77,26 @@ sub call_api { # What API are we using?
 	my %arg = validate( @_, { # Validate arguments
 		site 	=> { default => 'https://www.googleapis.com/drive/v3/' },
 		api		=> {type => SCALAR},
-		debug	=> {type => SCALAR, optional => 1, default => 0},
-		flags	=> {type => ARRAYREF},
-		fields	=> {type => ARRAYREF, optional => 1},
-		auth_key=> {type => SCALAR, optional => 
-						sub { return defined $auth_key },
+		debug	=> {type => SCALAR, optional => 1, default => ''},
+		flags	=> {type => ARRAYREF|UNDEF, optional => 1},
+		fields	=> {type => ARRAYREF|UNDEF, optional => 1},
+		auth_key=> {type => SCALAR, optional => ## 'request', 'response' or 'time'
+						sub { return defined $auth_key} },
 	});
 	print "\tRequest arguments: ", Dumper {%arg} if 
 		($arg{debug} eq 'request');
-	my @flags = @{ $arg{flags}  };
-	my @fields= @{ $arg{fields} };
-	my $url = $arg{site} . $arg{api} ;
 	
-	my $flags = ( scalar @flags  > 0 ) ?
-				('?' . join('&', @flags ) ) 
-				: '';
-	my $fields= ( scalar @fields > 0 ) ?
-				(($flags?'&':'?') . 
-				'fields='.join(',', @fields ) ) 
-				: '';
-	$url .= $flags . $fields;
-	print "GET request : $url\n" 
-		if ($arg{debug} eq 'request'||'response'||'time');
+	my $url = $arg{site} . $arg{api} ;
+	my @flags = ();
+	if ($arg{flags}) {
+		@flags = @{ $arg{flags}  } ;
+		$url .= '?' . join('&', @flags ) ;
+	}
+	if ($arg{fields}) {
+		my @fields= @{ $arg{fields} } ;
+		$url .= ($arg{flags}?'&':'?') . 'fields='.join(',', @fields ) ;
+	}
+	print "GET request :\n\t$url\n" if ($arg{debug} eq 'request');
 	if (defined $arg{auth_key}) { 
 		$auth_key = $arg{auth_key}; 
 		print "Using locally-proposed auth_key: $auth_key\n" if 
@@ -102,19 +107,19 @@ sub call_api { # What API are we using?
 		my $time0 = time;
 		my $call_header =  {'Authorization' => $auth_key};
 		$call_res = $ua->get( $url  => $call_header)->res 
-			or die "Can't call $arg{api}-api with $flags!\n";
+			or die "Can't call $arg{api}-api!\n";
 		if ($call_res->{error}) {
 			
 			# implement some error handling here
 			
 		}
-		print "Response: ", Dumper $call_res->json if 
-			($arg{debug} eq 'response');
+		print "Response: ", Dumper $call_res->json if ($arg{debug} eq 'response');
 		print "Response took: ". (time-$time0). " s\n" if 
 			($arg{debug} eq 'time');
 	} else {die "No authentification \n"}
 	return $call_res->json;
 };
+
 
 
 # Fetch list of available files with id's to play w/ proto
@@ -150,17 +155,37 @@ sub file_list_get {#Fetch list of available files with id's to play w/
 }
 
 # Fetch file properties proto
-sub file_get_properties( $file_id ) {
-	die "No fileId given!" unless $file_id;
-	my $response = call_api("files/$file_id",
-		 "fields=createdTime,description,fileExtension,".
-		 "headRevisionId,id,kind,lastModifyingUser,".
-		 "md5Checksum,mimeType,modifiedTime,name,".
-		 "originalFilename,owners,parents,permissions,".
-		 "properties,shared,sharingUser,size,trashed,".
-		 "version,webContentLink");
-	update_fields(\%response, \&time2ut, qw/createdTime modifiedTime/)
-	# unshaved
+sub file_get {
+	my @default_fields = qw/id kind name mimeType size description fileExtension 
+		lastModifyingUser md5Checksum modifiedTime headRevisionId owners 
+		parents permissions originalFilename properties shared sharingUser 
+		trashed  createdTime version webContentLink/;
+	my %arg = validate( @_, {
+		target	=> {type => HASHREF, optional => 1},
+		file_id	=> {type => SCALAR},
+		flags	=> {type => ARRAYREF, optional => 1}, ## need 2 rewrite
+		fields	=> {type => ARRAYREF, optional => 1},
+		fkeys	=> {type => ARRAYREF, optional => 1},
+		flags	=> {type => ARRAYREF, optional => 1}, 
+		shave	=> {type => SCALAR, optional => 1},
+		debug 	=> {type => SCALAR, optional => 1, default => undef},
+		});
+	my @fields = ($arg{fields}) ? $arg{fields} : @default_fields;
+	my $response = call_api(
+			api		=> "files/$arg{file_id}/",
+			flags	=> undef,
+			fields	=> \@fields,
+			);
+	
+	my @f2upd = qw/createdTime modifiedTime/;
+	update_fields(
+		hash	=> \%$response, 
+		funct	=> \&time2ut, 
+		fields	=> \@f2upd
+		);
+	print Dumper $response if $arg{debug};
+	
+	
 }
 
 
