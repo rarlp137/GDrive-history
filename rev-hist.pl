@@ -118,32 +118,47 @@ sub call_api { # What API are we using?
 
 
 # Fetch list of available files with id's to play w/ proto
-sub get_file_list() {
+sub file_list_get {#Fetch list of available files with id's to play w/
 #L<https://developers.google.com/drive/v3/reference/files/list>
-#Resp: "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
-# GET https://www.googleapis.com/drive/v3/files?corpus=domain&orderBy=folder&fields=files%2Ckind&key={API_KEY}
 #Resp: { "kind": "drive#fileList", "files": [  {  id  } , ... ]
-	my $response = call_api('files', qw/corpus=domain orderBy=folder fields=files/);
+	my @fkeys = qw/id kind name trashed mimeType owners size md5Checksum 
+		createdTime modifiedTime headRevisionId/;
+	my @flags = qw/corpus=domain orderBy=folder/;
+	my %arg = validate( @_, {
+		target	=> {type => HASHREF, optional => 1},
+		#flags	=> {type => ARRAYREF, optional => 1},
+		#fields	=> {type => ARRAYREF, optional => 1},
+		fkeys	=> {type => ARRAYREF, optional => 1, default =>\@fkeys},
+		flags	=> {type => ARRAYREF, optional => 1, default =>\@flags}, 
+		shave	=> {type => SCALAR, optional => 1},
+		debug => {type => SCALAR, optional => 1, default => undef},
+		});
+	my @fields =qw/files/;
+	my $response = call_api(
+		api => 'files', 
+		flags => \@flags,
+		fields=> \@fields,
+		#debug => \$arg{debug},
+	);
 	foreach my $file ( @{ $response->{files} } ) { 
-		# focus($file) -> over( 1, ['createdTime', 'modifiedTime'], sub{ time2ut($_[0]) } );
-		my @fkeys = qw/id kind name trashed mimeType owners size 
-				md5Checksum createdTime modifiedTime headRevisionId/;
-		my %fhash = %{ shave($file, @fkeys) };
+		my %fhash = %{ shave($file, @fkeys) } if (@fkeys);
 		update_fields(\%fhash, \&time2ut, qw/createdTime modifiedTime/);
-
+		print Dumper \%fhash if $arg{debug};
 	}
+	
+	
 }
 
 # Fetch file properties proto
 sub file_get_properties( $file_id ) {
 	die "No fileId given!" unless $file_id;
 	my $response = call_api("files/$file_id",
-				 "fields=createdTime,description,fileExtension,".
-				 "headRevisionId,id,kind,lastModifyingUser,".
-				 "md5Checksum,mimeType,modifiedTime,name,".
-				 "originalFilename,owners,parents,permissions,".
-				 "properties,shared,sharingUser,size,trashed,".
-				 "version,webContentLink");
+		 "fields=createdTime,description,fileExtension,".
+		 "headRevisionId,id,kind,lastModifyingUser,".
+		 "md5Checksum,mimeType,modifiedTime,name,".
+		 "originalFilename,owners,parents,permissions,".
+		 "properties,shared,sharingUser,size,trashed,".
+		 "version,webContentLink");
 	update_fields(\%response, \&time2ut, qw/createdTime modifiedTime/)
 	# unshaved
 }
