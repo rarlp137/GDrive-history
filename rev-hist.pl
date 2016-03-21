@@ -302,6 +302,51 @@ sub file_revision_get {
 ### { "kind": "drive#commentList", "comments": [ 
 #	  { "kind": "drive#comment", commentId, times, author, "replies": [ 
 #			{"kind": "drive#reply" is_derived_from: "drive#comment" } ]
+sub file_comments_get { 
+	my %arg = validate( @_, {
+		target	=> {type => HASHREF, optional => 1},
+		file_id	=> {type => SCALAR},
+		page_size => {type => SCALAR, optional => 1, default => 10},
+		fields	=> {type => ARRAYREF, optional => 1},
+		fkeys	=> {type => ARRAYREF, optional => 1},
+		flags	=> {type => ARRAYREF, optional => 1}, 
+		shave	=> {type => SCALAR, optional => 1},
+		debug 	=> {type => SCALAR, optional => 1, default => undef},
+		});
+	my @flags = ['includeDeleted=true', 'pageSize='.$arg{page_size}];
+	my @fields = ['kind', 'comments'];
+	my %comments = ();
+	my $next_page = '';
+	my $nor = 0; # overall number of requests
+	do {	# need to rewrite the whole thing
+		@fields[1] .= $next_page;
+		my $result = call_api(
+			api		=> 'files/'.$arg{file_id}.'/comments',
+			flags	=> @flags,
+			fields	=> \@{%fields},
+			debug	=> 'request',
+		);
+		$next_page = $result->{nextPageToken};
+		# merge comments from response into comments hash as an array
+		#@comments{keys $result->{comments}} = values $result->{comments};
+		print Dumper %comments;
+		$nor++;
+	} while ($next_page);# || $result->{nextPageToken}
+	# $a{$_} = exists $a{$_} ? 
+	#			[ ref $a{$_} ? @{$a{$_}} : $a{$_}, $b{$_} ] : 
+	#			$b{$_} 
+	#				foreach keys %b
+	#foreach my $comment ( @$comments ) {
+	#	$comment = shave(\$comment, qw/kind id createdTime modifiedTime author 
+	#								  deleted resolved replies/);
+	#	# shave author and comments hashes?
+	#	update_fields(\%$comment, \&time2ut, \@{qw/createdTime modifiedTime/});
+	#}
+	#print Dumper $comments;# if $arg{debug};
+	return \%comments;
+}
+
+file_comments_get(file_id => $test_document, page_size => 10);
 
 
 
