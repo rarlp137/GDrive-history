@@ -1,5 +1,12 @@
 #! /usr/bin/env perl
-use strict;
+use strict; 
+# TODO: 
+#	make auth to unit state-vars
+#	clean docs, getopts, pass2DBX?
+#	rewrite according to Perl::Critic --brutal severity
+#	outpace pragmas
+#	strip into modules
+#	patch-semantics
 use warnings;
 use diagnostics;
 use 5.20.00;
@@ -51,7 +58,7 @@ sub update_fields {
 }
 
 # stitch the RFC-3339 date-time to unix time
-sub time2ut { 
+sub time2ut {  # add wantarray
 	my %arg = validate( @_, { str => {type => SCALAR},});
 	my $f = DateTime::Format::RFC3339->new();
 	my $dt = $f->parse_datetime($arg{str});
