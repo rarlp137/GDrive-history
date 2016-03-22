@@ -13,7 +13,7 @@ use Data::Dumper; # Perl core module
 use Time::HiRes qw(time);
 #use Hash::Transform;
 #use Smart::Comments;
-use Params::Validate qw(:all);
+use Params::Validate qw(:all); # for internal signature ctrl
 
 use DateTime;
 use DateTime::Format::RFC3339;
@@ -25,6 +25,9 @@ use Mojo::UserAgent;
 use utf8;
 binmode STDOUT, ":utf8";
 
+## add the GetOpt's and usage
+
+## init the globals
 
 sub shave($hash, @fkeys) { # nice filter-lens-transform
 	my %shaved; # Data::Focus?
@@ -73,15 +76,16 @@ my $json = $tok_res->json;
 my $auth_key = $json->{token_type} . ' ' . $json->{access_token};
 
 # API caller proto
-sub call_api { # What API are we using?
+sub call_api {
 	my %arg = validate( @_, { # Validate arguments
+		target	=> {type => HASHREF, optional => 1},
 		site 	=> { default => 'https://www.googleapis.com/drive/v3/' },
-		api		=> {type => SCALAR},
-		debug	=> {type => SCALAR, optional => 1, default => ''},
-		flags	=> {type => ARRAYREF|UNDEF, optional => 1},
-		fields	=> {type => ARRAYREF|UNDEF, optional => 1},
-		auth_key=> {type => SCALAR, optional => ## 'request', 'response' or 'time'
-						sub { return defined $auth_key} },
+		api		=> {type => SCALAR},# What API are we using?
+		debug	=> {type => SCALAR, optional => 1, default => ''}, ## 'request', 'response' or 'time'
+		flags	=> {type => ARRAYREF|UNDEF, optional => 1}, # call properties
+		fields	=> {type => ARRAYREF|UNDEF, optional => 1}, # call response fields
+		auth_key=> {type => SCALAR, optional => 
+			  sub { return defined $auth_key}},
 	});
 	print "\tRequest arguments: ", Dumper {%arg} if 
 		($arg{debug} eq 'request');
@@ -102,6 +106,7 @@ sub call_api { # What API are we using?
 		print "Using locally-proposed auth_key: $auth_key\n" if 
 			($arg{debug} eq 'response');
 	};
+	my $tdiff = 0; # onsite, non-integrating!
 	my $call_res;
 	if (defined $auth_key) {
 		my $time0 = time;
@@ -113,11 +118,18 @@ sub call_api { # What API are we using?
 			# implement some error handling here
 			
 		}
-		print "Response: ", Dumper $call_res->json if ($arg{debug} eq 'response');
-		print "Response took: ". (time-$time0). " s\n" if 
+		$tdiff = time - $time0;
+		print "Response: ", Dumper $call_res->json if 
+			($arg{debug} eq 'response');
+		print "Response took: $tdiff s\n" if 
 			($arg{debug} eq 'time');
-	} else {die "No authentification \n"}
-	return $call_res->json;
+	} else {die "No authentification! \n"}
+	if (defined $arg{target}) {
+		$arg{target} = $call_res->json;
+		return "OK, took $tdiff sec.";
+	} else {
+		return $call_res->json;
+	};
 };
 
 
@@ -131,7 +143,6 @@ sub file_list_get {#Fetch list of available files with id's to play w/
 	my @flags = qw/corpus=domain orderBy=folder/;
 	my %arg = validate( @_, {
 		target	=> {type => HASHREF, optional => 1},
-		#fields	=> {type => ARRAYREF, optional => 1},
 		fkeys	=> {type => ARRAYREF, optional => 1, default =>\@fkeys},
 		flags	=> {type => ARRAYREF, optional => 1, default =>\@flags}, 
 		shave	=> {type => SCALAR, optional => 1},
@@ -143,7 +154,7 @@ sub file_list_get {#Fetch list of available files with id's to play w/
 		api => 'files', 
 		flags => \@flags,
 		fields=> \@fields,
-		#debug => \$arg{debug},
+		#debug => \$arg{debug}, # now has none, 4 validation concerns
 	);
 	foreach my $file ( @{ $response->{files} } ) { 
 		my %fhash = %{ shave($file, @fkeys) } if (@fkeys);
@@ -261,7 +272,7 @@ sub file_revisions_get  {
 ##	published,publishedOutsideDomain,size& key={API_KEY} 
 ### { "kind": "drive#revision", "id": revId ,
 ###	"lastModifyingUser": { "kind": "drive#user", "displayName": userName}}
-sub file_revision_get {
+sub file_revision_get {# ( $file_id, $revision_id )
 	my @dfields = qw/id kind mimeType md5Checksum size modifiedTime
 					  lastModifyingUser originalFilename published/;
 	my %arg = validate( @_, {
@@ -279,9 +290,12 @@ sub file_revision_get {
 		flags	=> undef,
 		fields	=> \@dfields,
 		);
-	
+	# only proto'ed. need 2 implement the holy patch semantics as in gdrive-merge to harm ATL
+	# https://developers.google.com/drive/v3/reference/changes/getStartPageToken & ibid., overall
 	print Dumper $response if defined $arg{debug};
+	return $response;
 }
+
 
 # Implement collector of LMUT's (possibly, w/ originated-from-UID)
 
@@ -290,18 +304,12 @@ sub file_revision_get {
 # sew & populate the userId collaboration chain from each revision
 
 
-
-
-# https://developers.google.com/drive/v3/reference/changes/getStartPageToken
-
-
-
 # fetch comments & replies, collect them in 2-by-2 hash (fileId, authorId ; time , content->lenght)
 ## GET https://www.googleapis.com/drive/v3/files/ fileId /comments?
 ##	includeDeleted=true&pageSize=100& fields=comments,kind,nextPageToken& key={YOUR_API_KEY}
 ### { "kind": "drive#commentList", "comments": [ 
 #	  { "kind": "drive#comment", commentId, times, author, "replies": [ 
-#			{"kind": "drive#reply" is_derived_from: "drive#comment" } ]
+#			{"kind": "drive#reply" is_derived_from: "drive#comment"+@action } ]
 sub file_comments_get { 
 	my %arg = validate( @_, {
 		target	=> {type => HASHREF, optional => 1},
@@ -313,8 +321,8 @@ sub file_comments_get {
 		shave	=> {type => SCALAR, optional => 1},
 		debug 	=> {type => SCALAR, optional => 1, default => undef},
 		});
-	my @flags = ['includeDeleted=true', 'pageSize='.$arg{page_size}];
-	my @fields = ['kind', 'comments'];
+	my @flags = ['includeDeleted=true', 'pageSize='.$arg{page_size}]; # inadmissible
+	my @fields = ['kind', 'comments']; # so as this 1
 	my %comments = ();
 	my $next_page = '';
 	my $nor = 0; # overall number of requests
@@ -336,16 +344,16 @@ sub file_comments_get {
 	#			[ ref $a{$_} ? @{$a{$_}} : $a{$_}, $b{$_} ] : 
 	#			$b{$_} 
 	#				foreach keys %b
-	#foreach my $comment ( @$comments ) {
+	#foreach my $comment ( @{$comments} ) {
 	#	$comment = shave(\$comment, qw/kind id createdTime modifiedTime author 
 	#								  deleted resolved replies/);
-	#	# shave author and comments hashes?
+	#	# shave author and comments hashes
 	#	update_fields(\%$comment, \&time2ut, \@{qw/createdTime modifiedTime/});
 	#}
 	#print Dumper $comments;# if $arg{debug};
-	return \%comments;
+	return \%comments; # lately, need 2 fix
 }
-
+my $test_document = '';
 file_comments_get(file_id => $test_document, page_size => 10);
 
 
