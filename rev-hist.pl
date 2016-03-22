@@ -4,6 +4,7 @@ use warnings;
 use diagnostics;
 use 5.20.00;
 use feature 'signatures'; no warnings qw(experimental::signatures);
+no warnings qw(experimental::autoderef);
 use Getopt::Long;
 #use Config::JSON;
 use Data::Dumper; # Perl core module
@@ -23,7 +24,7 @@ use Mojo::JWT::Google;
 use Mojo::Collection 'c';
 use Mojo::UserAgent;
 use utf8;
-binmode STDOUT, ":utf8";
+binmode STDOUT, ":encoding(UTF-8)";
 
 ## add the GetOpt's and usage
 
@@ -310,51 +311,51 @@ sub file_revision_get {# ( $file_id, $revision_id )
 ### { "kind": "drive#commentList", "comments": [ 
 #	  { "kind": "drive#comment", commentId, times, author, "replies": [ 
 #			{"kind": "drive#reply" is_derived_from: "drive#comment"+@action } ]
-sub file_comments_get { 
+sub file_comments_get { # mandatory requirements -- need 2 set 'can comment'-permission for each of srcs
 	my %arg = validate( @_, {
 		target	=> {type => HASHREF, optional => 1},
 		file_id	=> {type => SCALAR},
 		page_size => {type => SCALAR, optional => 1, default => 10},
 		fields	=> {type => ARRAYREF, optional => 1},
-		fkeys	=> {type => ARRAYREF, optional => 1},
+		fkeys	=> {type => ARRAYREF, optional => 1}, # critical
 		flags	=> {type => ARRAYREF, optional => 1}, 
 		shave	=> {type => SCALAR, optional => 1},
 		debug 	=> {type => SCALAR, optional => 1, default => undef},
 		});
-	my @flags = ['includeDeleted=true', 'pageSize='.$arg{page_size}]; # inadmissible
-	my @fields = ['kind', 'comments']; # so as this 1
-	my %comments = ();
-	my $next_page = '';
-	my $nor = 0; # overall number of requests
-	do {	# need to rewrite the whole thing
-		@fields[1] .= $next_page;
-		my $result = call_api(
+	my @flags = ['includeDeleted=true', "pageSize=".$arg{page_size}, ''];
+	my @fields = ['kind', 'comments', 'nextPageToken'];
+	my @comments = ();
+	my $next_page = undef;
+	my $result;
+	my ($nor,$noc) = 0; # overall number of requests
+	do { # too flacky, may use CSP?
+		$result = call_api( # fetch w/ returning the nxt-bearer
 			api		=> 'files/'.$arg{file_id}.'/comments',
 			flags	=> @flags,
-			fields	=> \@{%fields},
+			fields	=> @fields,
 			debug	=> 'request',
 		);
-		$next_page = $result->{nextPageToken};
-		# merge comments from response into comments hash as an array
-		#@comments{keys $result->{comments}} = values $result->{comments};
-		print Dumper %comments;
-		$nor++;
+		print Dumper $result if $arg{debug};
+		$next_page = $result->{nextPageToken} if $result;
+		pop $flags[0]; push $flags[0], "pageToken=$next_page" if $next_page;
+		$nor++; # for debug purposes
+		foreach my $comment (@{ $result->{comments} }) { # lazy to use map-magic
+			#	$comment = shave(\$comment, qw/kind id createdTime modifiedTime author 
+			#					deleted resolved replies/);
+			#	# shave author and comments hashes?
+			#	update_fields(\%$comment, \&time2ut, \@{qw/createdTime modifiedTime/});
+			#}
+			push @comments, $comment;
+			# stir the entire stuff for distilled hash
+		}
+		print "\t\tnoc in resp: ", scalar @{$result->{comments}}, "\n" if $arg{debug};
 	} while ($next_page);# || $result->{nextPageToken}
-	# $a{$_} = exists $a{$_} ? 
-	#			[ ref $a{$_} ? @{$a{$_}} : $a{$_}, $b{$_} ] : 
-	#			$b{$_} 
-	#				foreach keys %b
-	#foreach my $comment ( @{$comments} ) {
-	#	$comment = shave(\$comment, qw/kind id createdTime modifiedTime author 
-	#								  deleted resolved replies/);
-	#	# shave author and comments hashes
-	#	update_fields(\%$comment, \&time2ut, \@{qw/createdTime modifiedTime/});
-	#}
-	#print Dumper $comments;# if $arg{debug};
-	return \%comments; # lately, need 2 fix
+	print "\tnoc in comments: ", scalar @comments, "\n" if $arg{debug};
+	#print Dumper {@comments} if ($arg{debug} eq 'dump all');
+	#return \%comments;
 }
-my $test_document = '';
-file_comments_get(file_id => $test_document, page_size => 10);
+my $test_document = '' unless $glob{argument => ::doc_id}; # 4 test purposes
+file_comments_get(file_id => $test_document, page_size => 2);
 
 
 
