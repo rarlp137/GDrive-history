@@ -1,4 +1,5 @@
 package GDrive::History;
+use GDrive::API qw/:as_datasource/
 
 our @events = ();
 our %collab = ();
