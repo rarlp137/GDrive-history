@@ -6,6 +6,8 @@
 - add call-queues and expose for further chain-continuation 
 - implement stuff w/ patch semantics & return users _and_ document @ rev.
 - implement the get_all() wrapper
+- write the destructor w/ untie
+- in all calls, write checks numerical and string arguments
 =cut
 
 package GDrive::API;
@@ -69,7 +71,7 @@ sub new { # Not the Schwartzian way, e.g., return __PACKAGE__ }
 			=> { type => SCALAR, optional => 1}, 
 		cacheable	# allow the file-cache?
 			=> { type => SCALAR, optional => 1, 
-						depends => 'cache_file', default => 1},
+					depends => 'cache_file', default => 1},
 		cache_file	# file to sore our cache
 			=> { type => SCALAR, optional => 1, default => 'cache.txt'},
 		readable # setting 'readable' to 0 speedups the cache-file IO ops
@@ -160,8 +162,8 @@ sub prepare_request {
 	my $meaningless = shift;
 	my %arg = validate( @_, {
 		site 	=> { default => 'https://www.googleapis.com/drive' },
-		version	=> {type => SCALAR, optional => 1, # v2 and v3 both work fine
-			default => 'v3'}, # R we waiting 4 v4?
+		version	 # v2 and v3 both work fine... R we waiting 4 v4?
+			=> {type => SCALAR, optional => 1, default => 'v3'},
 		api		=> {type => SCALAR},# What API are we using?
 # TODO: try coercing w/ the hash-way, e.g. {properties => \[], fields => \[],}
 		flags	 # call properties
@@ -182,7 +184,7 @@ sub prepare_request {
 	# Append fields
 	if ($arg{fields}) {
 		$url .= ($arg{flags}?'&':'?') . # collate properties/fields separator
-			  'fields='.join(',', @{ $arg{fields} } ) ;
+			'fields='.join(',', @{ $arg{fields} } ) ;
 	}
 	# Reinstance existing call state into target with clone($ref)	
 	%{$arg{target}} = %{clone \%arg} if $arg{target} ; # forgetfull
@@ -274,12 +276,11 @@ sub call_api {
 # - strip the globals, implement stated tie-interface
 	my $meaningless = shift;
 	my %arg = validate( @_, { # Validate arguments
-		auth_key=> {type => SCALAR, optional => 1},
+		auth_key => {type => SCALAR, optional => 1},
 
 		request	=> {type => SCALAR}, # strict request string inquiry
 		allow_cached
-				=> {type => SCALAR, optional => 1, default => 1},
-
+			=> {type => SCALAR, optional => 1, default => 1},
 		expiration  # time in seconds
 				=> {type => SCALAR, optional => 1},
 
@@ -363,8 +364,8 @@ sub call_api {
 sub file_list_get {
 =for Reference:
 L<https://developers.google.com/drive/v3/reference/files/list>
-# "mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
-# { "kind": "drive#fileList", "files": [  {  id  } , ... ]
+{"mimeType": "application/vnd.google-apps.folder";; "kind": "drive#file",
+	{ "kind": "drive#fileList", "files": [  {  id  } , ... ]}
 =cut
 	my $self = shift;
 	my @fkeys = qw/id kind name trashed mimeType owners size md5Checksum 
@@ -414,7 +415,7 @@ sub file_get {
 		file_id	=> {type => SCALAR},
 
 		expiration # expiration time for inspected-file cache
-				=> {type => SCALAR, optional =>1, default => 3600},
+			=> {type => SCALAR, optional =>1, default => 3600},
 
 		fields	=> {type => ARRAYREF, optional => 1}, # rewrite?
 		fkeys	=> {type => ARRAYREF, optional => 1},
@@ -452,14 +453,14 @@ sub file_get {
 sub file_revisions_get  {
 =for Reference:
 L<https://developers.google.com/drive/v3/reference/revisions#methods>
-# { "kind": "drive#revision", "id": revId, "modifiedTime": RFC 3339 date-time } 
+{ "kind": "drive#revision", "id": revId, "modifiedTime": RFC 3339 date-time } 
 =cut
 	my $self = shift;
 	my %arg = validate( @_, {
 		file_id	=> {type => SCALAR},
 # TODO: more fields to go...
 		expiration # expiration time for file-list cache
-				=> {type => SCALAR, optional =>1, default => 3600},
+			=> {type => SCALAR, optional =>1, default => 3600},
 
 		fields	=> {type => ARRAYREF, optional => 1},
 		flags	=> {type => ARRAYREF, optional => 1}, 
@@ -513,8 +514,8 @@ sub files_revisions_get {
 sub file_revision_get { # ( $file_id, $revision_id ) are mandatory
 =for Reference:
 <https://developers.google.com/drive/v3/reference/revisions/get>
-# { "kind": "drive#revision", "id": revId , "lastModifyingUser": { 
-#		"kind": "drive#user", "displayName": userName}}
+{ "kind": "drive#revision", "id": revId , "lastModifyingUser": { 
+	"kind": "drive#user", "displayName": userName}}
 =cut
 	my $self = shift;
 	my @dfields = qw/id kind mimeType md5Checksum size modifiedTime
@@ -523,7 +524,6 @@ sub file_revision_get { # ( $file_id, $revision_id ) are mandatory
 		file_id	=> {type => SCALAR}, # And how can one test such str?
 		revision_id => {type => SCALAR},
 # TODO: more fields to go...
-
 		fields	=> {type => ARRAYREF, optional => 1},
 		fkeys	=> {type => ARRAYREF, optional => 1},
 		flags	=> {type => ARRAYREF, optional => 1}, 
@@ -555,9 +555,9 @@ sub file_revision_get { # ( $file_id, $revision_id ) are mandatory
 sub file_comments_get {
 =for Reference:
 L<https://developers.google.com/drive/v2/reference/comments>
-# { "kind": "drive#commentList", "comments": [ 
-#	  { "kind": "drive#comment", commentId, times, author, "replies": [ 
-#			{"kind": "drive#reply" is_derived_from: "drive#comment"+action } ]
+{ "kind": "drive#commentList", "comments": [ 
+	{ "kind": "drive#comment", commentId, times, author, "replies": [ 
+		{"kind": "drive#reply" is_derived_from: "drive#comment"+action } ]
 =cut
 	my $self = shift;
 	my %arg = validate( @_, {
@@ -565,7 +565,7 @@ L<https://developers.google.com/drive/v2/reference/comments>
 		page_size # max 100, useful for inline timeout setting
 		# ~240ms for 2, ~1242ms for 10, ~1693ms for 100
 		# TODO: check the argument for more than 100[ppr]
-				=> {type => SCALAR, optional => 1, default => 10},
+			=> {type => SCALAR, optional => 1, default => 10},
 
 		fields	=> {type => ARRAYREF, optional => 1},
 		fkeys	=> {type => ARRAYREF, optional => 1},
@@ -573,7 +573,7 @@ L<https://developers.google.com/drive/v2/reference/comments>
 		shave	=> {type => SCALAR, optional => 1},
 
 		expiration
-				=> {type => SCALAR, optional => 1, default => 300},
+			=> {type => SCALAR, optional => 1, default => 300},
 
 		target	=> {type => HASHREF, optional => 1},
 		debug 	=> {type => SCALAR, optional => 1, default => 0},
