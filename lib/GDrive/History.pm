@@ -26,7 +26,7 @@ sub collect_history {
   	}
 	
   	# Append document entity
-  	push @{$collab{files}{list}}, { # anonimous hash
+  	push @{$collab{files}{list}}, { # anonymous hash
   		name	=> $file->{name},
   		id		=> $file->{id},
   		# get importance of the current document
@@ -37,7 +37,7 @@ sub collect_history {
   		if ($comment->{deleted}) {
   			print "del";
   		}
-  		# too loooong accessor
+  		# loooong accessors are looooong
   		$collab{authors}{ $comment->{author} }{files} 
   			{ $file->{id} }{comments}{count}++;
   		
