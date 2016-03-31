@@ -1,3 +1,13 @@
+=for TODO: 
+- rewrite APIs in Contextual::Return-style
+- implement the try-outs and retry in actual_call()
+- strip the globals
+- implement stated tie-interface
+- add call-queues and expose for further chain-continuation 
+- implement stuff w/ patch semantics & return users _and_ document @ rev.
+- implement the get_all() wrapper
+=cut
+
 package GDrive::API;
 use strict;
 use warnings;
