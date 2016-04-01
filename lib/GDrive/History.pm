@@ -8,7 +8,8 @@ our %collab = ();
 In our particular case collaboration lattice (triple L = (G,M,I)) would be non-
 trivial because it would have 2 essential context object-sets, constructed from 
 typed terminals of directed acyclic graphs (as actions): 
-	G = { term( Actors ⊢ DAG ) x term( Documents ⊢ DAG ) } .
+	G = { term( {actor ∈ Actors ⊢ DAG} ) x 
+		term( {document ∈ Documents ⊢ DAG} ) } .
 Concept DAG's are heavily interlinked (beginning with semi-roots), therefore, 
 cannot form elegant object set. From more prominent perspective of actions/
 events, this simply would imply the following types:
