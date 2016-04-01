@@ -131,6 +131,8 @@ sub collect_history {
 Of course, one could populate action events into the sequences (generally, using
 sequence mining algorithms) and study them as patterns for evaluation. This 
 attempt has restrictions and brings much overhead regarding the task. 
+See,: Mabroukeh, N., Ezeife, C. (2010). A taxonomy of sequential pattern mining 
+algorithms". ACM Computing Surveys 43: 1–41.
 =cut
 
 
