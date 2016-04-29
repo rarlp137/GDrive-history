@@ -1,0 +1,44 @@
+// entities
+"store" [
+    label = "<c00> Store | <c01> attrs: collection | <c02> instances | 
+	<c03> functions: | <c04> state: online, fail-over | <c06> spec | 
+	<c07> derived-from: "
+    shape = "record"
+];
+
+"source" [
+    label = "<c00> Source | <c01> attrs: singleton | <c02> instances | 
+	<c03> functions | <c04> state: attainability | <c05> provides | 
+	<c07>  derived-from: "
+    shape = "record"
+];
+
+"entity" [
+    label = "<c00> Entity | <c01> attrs: collection | <c02> instances | 
+	<c03> functions | <c04> state: attainability | <c05> provides | 
+	<c06> spec | <c07> derived-from: RDF:Entity"
+    shape = "record"
+];
+
+"api" [
+    label = "<c00>" API | <c01> attrs: wrapper | <c02> instances | 
+	<c03> functions | <c04> state: attainability | <c05> provides | 
+	<c06> spec | <c07> derived-from: collection-cacheable"
+    shape = "record"
+];
+
+"event" [
+    label = "<c00>" Event | <c01> attrs: selector | <c02> instances | 
+	<c03> functions | <c04> state: attainability | <c05> provides | 
+	<c06> spec | <c07> derived-from: element"
+    shape = "record"
+];
+
+
+// extends
+"store":c02 -> "source":c00 [label="provides-*"];
+"source":c01 -> "entity":c06 [label="wrap-once"];
+"source":c02 -> "event":c00 [label="collection-of"];
+"entity":c02 -> "api":c05 [label="filter"];
+"event":c07 -> "entity":c05 [label="map-from-*"];
+}
